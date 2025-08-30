@@ -2,9 +2,9 @@ import streamlit as st
 import pandas as pd
 import joblib
 
-# Load trained model
+# --- Load trained model and column order ---
 model = joblib.load("healthcare_model.pkl")
-
+model_columns = joblib.load("model_columns.pkl")  
 st.title("🩺 Healthcare Symptom Checker Chatbot")
 st.write("Enter your symptoms and health information to check your outcome.")
 
@@ -17,14 +17,13 @@ Age = st.number_input("Age", min_value=0, max_value=120)
 Gender = st.radio("Gender", ["Male", "Female"])
 BP = st.radio("Blood Pressure", ["Normal", "High"])
 Chol = st.radio("Cholesterol Level", ["Normal", "High"])
-Disease = st.text_input("Disease")  # Optional: encode manually if needed
-
-# Convert user input same as training preprocessing
+Disease = st.text_input("Disease")  
+# --- Preprocess input ---
 binary_map = {"Yes":1, "No":0}
 gender_map = {"Male":0, "Female":1}
 bp_map = {"Normal":0, "High":1}
 chol_map = {"Normal":0, "High":1}
-disease_map = {0:0}  
+
 
 input_data = pd.DataFrame({
     'Fever': [binary_map[Fever]],
@@ -38,7 +37,9 @@ input_data = pd.DataFrame({
     'Disease': [0]  
 })
 
-# --- Predict Outcome ---
+input_data = input_data.reindex(columns=model_columns, fill_value=0)
+
+
 if st.button("Check Outcome"):
     prediction = model.predict(input_data)[0]
     proba = model.predict_proba(input_data)[0][prediction]
