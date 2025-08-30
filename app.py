@@ -6,13 +6,15 @@ import joblib
 model = joblib.load("healthcare_model.pkl")
 model_columns = joblib.load("model_columns.pkl")
 
-st.title("🩺 Conversational Healthcare Symptom Checker Chatbot")
-st.write("Answer the questions one by one to check your outcome.")
+st.title("🩺 Healthcare Symptom Checker Chatbot")
+st.write("Answer the questions to check your health outcome.\n")
 
 # --- Initialize session state ---
 if "step" not in st.session_state:
     st.session_state.step = 0
     st.session_state.responses = {}
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
 
 # --- Mapping dictionaries ---
 binary_map = {"Yes":1, "No":0}
@@ -33,10 +35,35 @@ questions = [
     ("Disease", None)
 ]
 
-# --- Show current question ---
+# --- Helper to display chat bubbles ---
+def display_chat():
+    for speaker, message in st.session_state.chat_history:
+        if speaker == "bot":
+            st.markdown(f"""
+            <div style='text-align: left; margin:10px 0;'>
+                <span style='background-color:#F0F0F0; padding:10px; border-radius:10px; display:inline-block;'>{message}</span>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.markdown(f"""
+            <div style='text-align: right; margin:10px 0;'>
+                <span style='background-color:#A0E7E5; padding:10px; border-radius:10px; display:inline-block;'>{message}</span>
+            </div>
+            """, unsafe_allow_html=True)
+
+# --- Display previous chat ---
+display_chat()
+
+# --- Conversation flow ---
 if st.session_state.step < len(questions):
     q, options = questions[st.session_state.step]
 
+    # Show bot question
+    if len(st.session_state.chat_history) == st.session_state.step*2:
+        st.session_state.chat_history.append(("bot", q + "?"))
+        display_chat()
+
+    # Get user input
     if options:
         response = st.radio(f"{q}?", options, key=f"{q}_radio")
     else:
@@ -45,15 +72,15 @@ if st.session_state.step < len(questions):
         else:
             response = st.text_input(f"{q}:", key=f"{q}_text")
 
-    # Use a button to go to next question
-    next_clicked = st.button("Next")
+    next_clicked = st.button("Send")
     if next_clicked:
+        # Store user response
         st.session_state.responses[q] = response
+        st.session_state.chat_history.append(("user", str(response)))
         st.session_state.step += 1
-        st.experimental_rerun()  
-else:
-    st.write("All questions answered. Checking outcome...")
+        st.experimental_rerun()
 
+else:
     # --- Preprocess input ---
     input_data = pd.DataFrame({
         'Fever': [binary_map.get(st.session_state.responses.get("Fever"),0)],
@@ -64,22 +91,21 @@ else:
         'Gender': [gender_map.get(st.session_state.responses.get("Gender"),0)],
         'Blood Pressure': [bp_map.get(st.session_state.responses.get("Blood Pressure"),0)],
         'Cholesterol Level': [chol_map.get(st.session_state.responses.get("Cholesterol Level"),0)],
-        'Disease': [0]  
+        'Disease': [0]  # Replace with proper encoding if needed
     })
 
-    # Align columns
     input_data = input_data.reindex(columns=model_columns, fill_value=0)
 
-    # --- Predict ---
     prediction = model.predict(input_data)[0]
     proba = model.predict_proba(input_data)[0][prediction]
     result = "Positive" if prediction == 1 else "Negative"
 
-    st.success(f"Predicted Outcome: {result}")
-    st.info(f"Prediction Confidence: {proba*100:.2f}%")
+    st.session_state.chat_history.append(("bot", f"Predicted Outcome: {result}"))
+    st.session_state.chat_history.append(("bot", f"Confidence: {proba*100:.2f}%"))
+    display_chat()
 
-    # Restart button
     if st.button("Restart"):
         st.session_state.step = 0
         st.session_state.responses = {}
+        st.session_state.chat_history = []
         st.experimental_rerun()
